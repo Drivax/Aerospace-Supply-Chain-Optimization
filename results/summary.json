@@ -1,0 +1,21 @@
+{
+  "status": "Optimal",
+  "procurement_cost": 1889077.3768197994,
+  "fixed_cost": 37983.62843599201,
+  "delay_cost": 24146.53873824642,
+  "total_cost": 1951207.5439940377,
+  "risk_score": 8.812008209746528,
+  "on_time_rate": 1.0,
+  "budget": 3290921.3466178216,
+  "deadline_days": 28.0,
+  "risk_weight": 0.2,
+  "scenario_count": 80,
+  "supplier_reliability_variance": 0.005348743374047495,
+  "baseline_total_cost": 14169534.422486478,
+  "optimized_total_cost": 1951207.5439940377,
+  "cost_reduction_ratio": 0.8622955782585524,
+  "solve_time_seconds": 0.8979589999653399,
+  "mae_delay_model": 1.4561913139133256,
+  "rmse_delay_model": 1.8923900330626127,
+  "residual_std_delay_model": 1.8900875135084378
+}
