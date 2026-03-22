@@ -22,7 +22,7 @@ if "base_df" not in st.session_state:
 
 base_df = st.session_state.base_df.copy()
 
-col_a, col_b, col_c, col_d = st.columns(4)
+col_a, col_b, col_c, col_d, col_e = st.columns(5)
 with col_a:
     demand_multiplier = st.slider("Demand multiplier", 0.6, 1.6, 1.0, 0.05)
 with col_b:
@@ -31,6 +31,8 @@ with col_c:
     deadline = st.slider("Deadline (days)", 14, 40, 28, 1)
 with col_d:
     risk_weight = st.slider("Risk weight", 0.0, 1.0, 0.2, 0.05)
+with col_e:
+    carbon_weight = st.slider("Carbon weight", 0.0, 1.0, 0.1, 0.05)
 
 scenario_count = st.slider("Delay scenarios", 50, 100, 80, 5)
 failed_suppliers = st.multiselect(
@@ -63,6 +65,7 @@ if st.button("Run Re-Optimization", type="primary"):
         delay_penalty=4.0,
         delay_scenarios=scenarios,
         risk_weight=float(risk_weight),
+        carbon_weight=float(carbon_weight),
         scenario_confidence=0.9,
         delay_variability_cap=3.0,
         solver_time_limit=10,

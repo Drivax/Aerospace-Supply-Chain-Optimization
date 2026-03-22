@@ -69,6 +69,7 @@ def optimize_procurement(
     delay_penalty: float,
     delay_scenarios: Optional[np.ndarray] = None,
     risk_weight: float = 0.0,
+    carbon_weight: float = 0.0,
     scenario_confidence: float = 0.9,
     delay_variability_cap: float = 3.0,
     solver_time_limit: int = 10,
@@ -109,10 +110,20 @@ def optimize_procurement(
         supplier_risk.get(str(df.loc[idx, "supplier_id"]), 0.0) * x[idx]
         for idx in df.index
     )
+    carbon_term = pulp.lpSum(
+        float(df.loc[idx, "carbon_kg_per_unit"]) * x[idx]
+        for idx in df.index
+    )
     risk_scale = float(df["unit_cost"].mean()) if float(df["unit_cost"].mean()) > 0 else 1.0
+    carbon_scale = risk_scale
     clipped_weight = float(np.clip(risk_weight, 0.0, 1.0))
+    clipped_carbon_weight = float(max(0.0, carbon_weight))
     # Weighted-sum multi-objective: cost term + scaled risk term.
-    model += (1.0 - clipped_weight) * cost_term + clipped_weight * risk_scale * risk_term
+    model += (
+        (1.0 - clipped_weight) * cost_term
+        + clipped_weight * risk_scale * risk_term
+        + clipped_carbon_weight * carbon_scale * carbon_term
+    )
 
     for component, required_qty in demand.items():
         idxs = [idx for idx in df.index if df.loc[idx, "component"] == component]
@@ -164,10 +175,12 @@ def optimize_procurement(
             "delay_cost": 0.0,
             "total_cost": 0.0,
             "risk_score": 0.0,
+            "carbon_score_kg": 0.0,
             "on_time_rate": 0.0,
             "budget": float(budget),
             "deadline_days": float(deadline_days),
             "risk_weight": clipped_weight,
+            "carbon_weight": clipped_carbon_weight,
             "scenario_count": int(delay_scenarios.shape[1]) if delay_scenarios is not None else 0,
             "supplier_reliability_variance": supplier_rel_var,
         }
@@ -187,6 +200,7 @@ def optimize_procurement(
                 "quantity": qty,
                 "unit_cost": float(row["unit_cost"]),
                 "fixed_penalty": float(row["fixed_penalty"]),
+                "carbon_kg_per_unit": float(row["carbon_kg_per_unit"]),
                 "predicted_delay_days": float(row["predicted_delay_days"]),
                 "expected_delay_days": float(expected_delay[pos]),
                 "worst_delay_days": float(worst_delay[pos]),
@@ -211,6 +225,11 @@ def optimize_procurement(
     risk_score = (
         float((plan["quantity"] * plan["supplier_risk_coeff"]).sum()) if not plan.empty else 0.0
     )
+    carbon_score = (
+        float((plan["quantity"] * plan["carbon_kg_per_unit"]).sum())
+        if not plan.empty and "carbon_kg_per_unit" in plan.columns
+        else 0.0
+    )
     total_cost = procurement_cost + fixed_cost + delay_cost
     on_time_rate = (
         float((plan["worst_arrival_days"] <= deadline_days).mean())
@@ -225,10 +244,12 @@ def optimize_procurement(
         "delay_cost": delay_cost,
         "total_cost": total_cost,
         "risk_score": risk_score,
+        "carbon_score_kg": carbon_score,
         "on_time_rate": on_time_rate,
         "budget": float(budget),
         "deadline_days": float(deadline_days),
         "risk_weight": clipped_weight,
+        "carbon_weight": clipped_carbon_weight,
         "scenario_count": int(delay_scenarios.shape[1]) if delay_scenarios is not None else 0,
         "supplier_reliability_variance": supplier_rel_var,
     }

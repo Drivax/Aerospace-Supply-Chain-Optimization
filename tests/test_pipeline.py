@@ -7,6 +7,9 @@ from src.optimizer import optimize_procurement
 
 def test_end_to_end_pipeline_feasible_solution() -> None:
     df = generate_supply_chain_data(GenerationConfig(num_suppliers=12, seed=7))
+    assert "telemetry_anomaly_score" in df.columns
+    assert "carbon_kg_per_unit" in df.columns
+
     model = train_delay_model(df)
 
     df = df.copy()
@@ -20,11 +23,13 @@ def test_end_to_end_pipeline_feasible_solution() -> None:
         budget=3_000_000,
         deadline_days=30,
         delay_penalty=3.0,
+        carbon_weight=0.1,
     )
 
     assert summary["status"] == "Optimal"
     assert not plan.empty
     assert (plan["arrival_days"] <= 30).all()
+    assert summary["carbon_score_kg"] > 0
 
     delivered = plan.groupby("component")["quantity"].sum().to_dict()
     for component, required in demand.items():

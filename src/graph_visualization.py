@@ -37,17 +37,93 @@ def plot_optimized_network(plan: pd.DataFrame, output_path: Path) -> None:
         weight = float(row["quantity"] * row["unit_cost"])
         graph.add_edge(row["supplier_id"], row["component"], weight=weight)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    pos = nx.spring_layout(graph, seed=21) if graph.number_of_nodes() > 0 else {}
-    # Scale widths to make high-spend lanes visually dominant.
-    edge_widths = [max(0.8, d["weight"] / 50000) for _, _, d in graph.edges(data=True)]
+    fig, ax = plt.subplots(figsize=(14, 8))
 
-    nx.draw_networkx_nodes(graph, pos, nodelist=suppliers, node_color="#0EA5E9", node_size=700, ax=ax)
-    nx.draw_networkx_nodes(graph, pos, nodelist=components, node_color="#22C55E", node_size=900, ax=ax)
-    nx.draw_networkx_edges(graph, pos, width=edge_widths, alpha=0.6, ax=ax)
-    nx.draw_networkx_labels(graph, pos, font_size=8, ax=ax)
+    if graph.number_of_nodes() == 0:
+        ax.set_title("Optimized Supplier-Component Network (No Orders)")
+        ax.axis("off")
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=140)
+        plt.close(fig)
+        return
 
-    ax.set_title("Optimized Supplier-Component Network")
+    # Deterministic two-column layout: suppliers on the left, components on the right.
+    def _vertical_positions(nodes: list[str]) -> dict[str, float]:
+        if not nodes:
+            return {}
+        if len(nodes) == 1:
+            return {nodes[0]: 0.5}
+        return {name: 1.0 - (idx / (len(nodes) - 1)) for idx, name in enumerate(nodes)}
+
+    sup_y = _vertical_positions(suppliers)
+    comp_y = _vertical_positions(components)
+    pos = {s: (0.08, sup_y[s]) for s in suppliers}
+    pos.update({c: (0.92, comp_y[c]) for c in components})
+
+    supplier_spend = {s: 0.0 for s in suppliers}
+    component_spend = {c: 0.0 for c in components}
+    edge_weights = []
+    for u, v, data in graph.edges(data=True):
+        w = float(data.get("weight", 0.0))
+        edge_weights.append(w)
+        if u in supplier_spend:
+            supplier_spend[u] += w
+            component_spend[v] += w
+        else:
+            supplier_spend[v] += w
+            component_spend[u] += w
+
+    max_edge = max(edge_weights) if edge_weights else 1.0
+    edge_widths = [1.5 + 8.5 * (float(d["weight"]) / max_edge) for _, _, d in graph.edges(data=True)]
+    edge_colors = [float(d["weight"]) / max_edge for _, _, d in graph.edges(data=True)]
+
+    max_supplier_spend = max(supplier_spend.values()) if supplier_spend else 1.0
+    max_component_spend = max(component_spend.values()) if component_spend else 1.0
+    supplier_sizes = [700 + 2200 * (supplier_spend[s] / max_supplier_spend) for s in suppliers]
+    component_sizes = [700 + 2200 * (component_spend[c] / max_component_spend) for c in components]
+
+    nx.draw_networkx_nodes(
+        graph,
+        pos,
+        nodelist=suppliers,
+        node_color="#0EA5E9",
+        node_size=supplier_sizes,
+        linewidths=1.0,
+        edgecolors="#075985",
+        ax=ax,
+    )
+    nx.draw_networkx_nodes(
+        graph,
+        pos,
+        nodelist=components,
+        node_color="#22C55E",
+        node_size=component_sizes,
+        linewidths=1.0,
+        edgecolors="#166534",
+        ax=ax,
+    )
+    nx.draw_networkx_edges(
+        graph,
+        pos,
+        width=edge_widths,
+        edge_color=edge_colors,
+        edge_cmap=plt.cm.Blues,
+        alpha=0.8,
+        ax=ax,
+    )
+
+    # Keep labels readable by shortening very long component names.
+    supplier_labels = {s: s for s in suppliers}
+    component_labels = {
+        c: (c if len(c) <= 24 else c[:21] + "...")
+        for c in components
+    }
+    nx.draw_networkx_labels(graph, pos, labels=supplier_labels, font_size=9, font_weight="bold", ax=ax)
+    nx.draw_networkx_labels(graph, pos, labels=component_labels, font_size=8, ax=ax)
+
+    ax.text(0.08, 1.03, "Suppliers", fontsize=11, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.86, 1.03, "Components", fontsize=11, fontweight="bold", transform=ax.transAxes)
+    ax.set_title("Optimized Supplier-Component Network (edge width/color = spend)")
     ax.axis("off")
     fig.tight_layout()
     fig.savefig(output_path, dpi=140)

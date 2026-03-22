@@ -43,6 +43,14 @@ def _mode_delay_bias(mode: str) -> float:
     return 1.3
 
 
+def _mode_carbon_factor(mode: str) -> float:
+    if mode == "air":
+        return 1.9
+    if mode == "road":
+        return 1.0
+    return 0.55
+
+
 def generate_supply_chain_data(config: GenerationConfig) -> pd.DataFrame:
     """Create synthetic supplier-component observations with realistic variability."""
     rng = np.random.default_rng(config.seed)
@@ -68,6 +76,37 @@ def generate_supply_chain_data(config: GenerationConfig) -> pd.DataFrame:
             seasonality_index = float(rng.uniform(0.7, 1.3))
             bottleneck_risk = float(np.clip(rng.beta(2, 5), 0.01, 0.95))
 
+            # Synthetic telemetry channels commonly available from IoT gateway feeds.
+            telemetry_temp_c = float(rng.normal(58, 14))
+            telemetry_vibration = float(np.clip(rng.normal(5.0, 2.0), 0.0, 15.0))
+            telemetry_pressure_delta = float(np.clip(rng.normal(1.2, 0.7), 0.0, 4.0))
+            telemetry_packet_loss = float(np.clip(rng.beta(1.5, 12), 0.0, 1.0))
+
+            # Telemetry anomaly score used later as a predictive signal for delays.
+            telemetry_anomaly_score = float(
+                np.clip(
+                    0.34 * (telemetry_vibration / 15.0)
+                    + 0.22 * (telemetry_pressure_delta / 4.0)
+                    + 0.24 * telemetry_packet_loss
+                    + 0.20 * float(abs(telemetry_temp_c - 60.0) / 40.0),
+                    0.0,
+                    1.0,
+                )
+            )
+            telemetry_anomaly_flag = int(telemetry_anomaly_score >= 0.62)
+
+            # Carbon estimate per shipped unit (kgCO2e/unit) based on distance and mode.
+            carbon_kg_per_unit = float(
+                np.clip(
+                    8.0
+                    + 0.0038 * distance_km * _mode_carbon_factor(transport_mode)
+                    + 2.1 * float(order_size / 90.0)
+                    + rng.normal(0, 1.2),
+                    1.0,
+                    180.0,
+                )
+            )
+
             historical_mean_delay = float(
                 np.clip(
                     # Delay formula combines logistics and risk effects with noise.
@@ -78,6 +117,8 @@ def generate_supply_chain_data(config: GenerationConfig) -> pd.DataFrame:
                     + 1.8 * weather_base
                     + 1.6 * geopolitical_base
                     + 1.8 * bottleneck_risk
+                    + 3.0 * telemetry_anomaly_score
+                    + 1.1 * telemetry_anomaly_flag
                     + rng.normal(0, 0.6),
                     0.0,
                     10.0,
@@ -110,6 +151,13 @@ def generate_supply_chain_data(config: GenerationConfig) -> pd.DataFrame:
                     "weather_risk": weather_base,
                     "geopolitical_risk": geopolitical_base,
                     "bottleneck_risk": bottleneck_risk,
+                    "telemetry_temp_c": telemetry_temp_c,
+                    "telemetry_vibration": telemetry_vibration,
+                    "telemetry_pressure_delta": telemetry_pressure_delta,
+                    "telemetry_packet_loss": telemetry_packet_loss,
+                    "telemetry_anomaly_score": telemetry_anomaly_score,
+                    "telemetry_anomaly_flag": telemetry_anomaly_flag,
+                    "carbon_kg_per_unit": carbon_kg_per_unit,
                     "delay_days": sampled_delay,
                 }
             )

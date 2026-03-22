@@ -29,10 +29,29 @@ FEATURE_COLUMNS = [
     "weather_risk",
     "geopolitical_risk",
     "bottleneck_risk",
+    "telemetry_temp_c",
+    "telemetry_vibration",
+    "telemetry_pressure_delta",
+    "telemetry_packet_loss",
+    "telemetry_anomaly_score",
+    "telemetry_anomaly_flag",
     "fixed_penalty",
+    "carbon_kg_per_unit",
     "supplier_id",
     "component",
 ]
+
+CATEGORICAL_COLUMNS = ["transportation_mode", "supplier_id", "component"]
+
+DEFAULT_FEATURE_VALUES = {
+    "telemetry_temp_c": 60.0,
+    "telemetry_vibration": 4.0,
+    "telemetry_pressure_delta": 1.0,
+    "telemetry_packet_loss": 0.05,
+    "telemetry_anomaly_score": 0.2,
+    "telemetry_anomaly_flag": 0,
+    "carbon_kg_per_unit": 25.0,
+}
 
 
 @dataclass
@@ -42,7 +61,7 @@ class ModelArtifacts:
 
 
 def _build_pipeline() -> Pipeline:
-    categorical = ["transportation_mode", "supplier_id", "component"]
+    categorical = CATEGORICAL_COLUMNS
     numeric = [col for col in FEATURE_COLUMNS if col not in categorical]
 
     # Encode categorical fields and pass numeric features unchanged.
@@ -68,8 +87,20 @@ def _build_pipeline() -> Pipeline:
     )
 
 
+def _prepare_features(df: pd.DataFrame) -> pd.DataFrame:
+    X = df.copy()
+    for col in FEATURE_COLUMNS:
+        if col in X.columns:
+            continue
+        if col in CATEGORICAL_COLUMNS:
+            X[col] = "unknown"
+        else:
+            X[col] = DEFAULT_FEATURE_VALUES.get(col, 0.0)
+    return X[FEATURE_COLUMNS]
+
+
 def train_delay_model(df: pd.DataFrame, target_col: str = "delay_days") -> ModelArtifacts:
-    X = df[FEATURE_COLUMNS]
+    X = _prepare_features(df)
     y = df[target_col]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -93,5 +124,5 @@ def train_delay_model(df: pd.DataFrame, target_col: str = "delay_days") -> Model
 
 
 def predict_delays(model: Pipeline, df: pd.DataFrame) -> np.ndarray:
-    delays = model.predict(df[FEATURE_COLUMNS])
+    delays = model.predict(_prepare_features(df))
     return np.clip(delays, 0, None)

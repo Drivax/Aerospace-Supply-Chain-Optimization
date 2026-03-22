@@ -38,6 +38,12 @@ def parse_args() -> argparse.Namespace:
         help="Cost multiplier applied to predicted delay",
     )
     parser.add_argument("--risk-weight", type=float, default=0.2, help="Weight of supply risk in objective (0-1)")
+    parser.add_argument(
+        "--carbon-weight",
+        type=float,
+        default=0.1,
+        help="Weight mu for carbon objective term (>=0)",
+    )
     parser.add_argument("--scenarios", type=int, default=80, help="Monte Carlo delay scenarios (50-100 recommended)")
     parser.add_argument(
         "--scenario-confidence",
@@ -141,6 +147,7 @@ def main() -> None:
         delay_penalty=args.delay_penalty,
         delay_scenarios=delay_scenarios,
         risk_weight=args.risk_weight,
+        carbon_weight=args.carbon_weight,
         scenario_confidence=args.scenario_confidence,
         delay_variability_cap=args.delay_variability_cap,
         solver_time_limit=args.time_limit,
@@ -178,6 +185,7 @@ def main() -> None:
                 delay_penalty=args.delay_penalty,
                 delay_scenarios=delay_scenarios,
                 risk_weight=float(w),
+                carbon_weight=args.carbon_weight,
                 scenario_confidence=args.scenario_confidence,
                 delay_variability_cap=args.delay_variability_cap,
                 solver_time_limit=args.time_limit,
@@ -189,6 +197,7 @@ def main() -> None:
                     "risk_weight": float(w),
                     "total_cost": float(front_summary["total_cost"]),
                     "risk_score": float(front_summary["risk_score"]),
+                    "carbon_score_kg": float(front_summary.get("carbon_score_kg", 0.0)),
                 }
             )
         pareto_df = pd.DataFrame(rows)
@@ -212,11 +221,13 @@ def main() -> None:
     print(f"Optimization status: {summary['status']}")
     print(f"Budget used: {budget:,.2f}")
     print(f"Risk weight: {args.risk_weight:.2f}")
+    print(f"Carbon weight: {args.carbon_weight:.2f}")
     print(f"Scenarios: {args.scenarios}")
     print(f"Baseline cost: {baseline_cost:,.2f}")
     print(f"Optimized cost: {optimized_cost:,.2f}")
     print(f"Cost reduction: {100 * cost_reduction:.2f}%")
     print(f"On-time rate: {100 * summary['on_time_rate']:.2f}%")
+    print(f"Carbon score (kgCO2e): {summary.get('carbon_score_kg', 0.0):,.2f}")
     print(f"Solve time: {solve_time_seconds:.3f}s")
     print(f"Results written to: {output_dir}")
 
