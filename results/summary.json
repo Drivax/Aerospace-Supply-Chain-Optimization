@@ -16,7 +16,7 @@
   "baseline_total_cost": 8818928.948578646,
   "optimized_total_cost": 2756752.682807231,
   "cost_reduction_ratio": 0.687405046703371,
-  "solve_time_seconds": 0.14533760002814233,
+  "solve_time_seconds": 0.13788269995711744,
   "mae_delay_model": 1.4795475384481278,
   "rmse_delay_model": 1.9149120662572856,
   "residual_std_delay_model": 1.9148612666467366
